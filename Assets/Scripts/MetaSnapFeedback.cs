@@ -18,7 +18,7 @@ public class MetaSnapFeedback : MonoBehaviour
 
     [Header("Snap Point")]
     [SerializeField] private Transform snapPoint;
-    [SerializeField] private float snapDistanceThreshold = 0.18f;
+    [SerializeField] private float snapDistanceThreshold = 0.22f;
 
     public bool IsSolved { get; private set; } = false;
     public static event Action<string> OnWrongPlacement;
@@ -26,6 +26,9 @@ public class MetaSnapFeedback : MonoBehaviour
 
     private AudioSource audioSource;
     private float lastWrongTriggerTime = 0f;
+
+    // Zero-allocation buffer for Physics overlap check
+    private readonly Collider[] hitBuffer = new Collider[4];
 
     private void Awake()
     {
@@ -48,11 +51,11 @@ public class MetaSnapFeedback : MonoBehaviour
     {
         if (IsSolved) return;
 
-        // Proximity detection fallback: guarantees detection even if physics triggers skip
-        Collider[] hits = Physics.OverlapSphere(transform.position, snapDistanceThreshold);
-        foreach (var hit in hits)
+        // NonAlloc prevents GC garbage collection hitching every frame
+        int hitCount = Physics.OverlapSphereNonAlloc(transform.position, snapDistanceThreshold, hitBuffer);
+        for (int i = 0; i < hitCount; i++)
         {
-            DraggableShape shape = hit.GetComponentInParent<DraggableShape>();
+            var shape = hitBuffer[i].GetComponentInParent<DraggableShape>();
             if (shape != null && !shape.IsLocked)
             {
                 EvaluateShape(shape);
@@ -65,7 +68,7 @@ public class MetaSnapFeedback : MonoBehaviour
     {
         if (IsSolved) return;
 
-        DraggableShape shape = other.GetComponentInParent<DraggableShape>();
+        var shape = other.GetComponentInParent<DraggableShape>();
         if (shape != null && !shape.IsLocked)
         {
             EvaluateShape(shape);

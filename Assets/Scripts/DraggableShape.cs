@@ -13,6 +13,8 @@ public class DraggableShape : MonoBehaviour
 
     private Vector3 initialPosition;
     private Quaternion initialRotation;
+    private Transform initialParent;
+
     private Rigidbody rb;
     private Grabbable grabbable;
     private GrabInteractable grabInteractable;
@@ -30,11 +32,12 @@ public class DraggableShape : MonoBehaviour
 
         initialPosition = transform.position;
         initialRotation = transform.rotation;
+        initialParent = transform.parent;
     }
 
     private void Update()
     {
-        // Safety: If shape falls off the table below Y = 0, auto-respawn
+        // Auto-respawn if dropped off table
         if (!isLocked && transform.position.y < 0.2f)
         {
             ResetToSpawn();
@@ -46,11 +49,12 @@ public class DraggableShape : MonoBehaviour
         isLocked = true;
         StopAllCoroutines();
 
-        // Sever grab interaction completely
+        // 1. Disable grabbable components to sever active hand/controller grip
         if (grabbable != null) grabbable.enabled = false;
         if (grabInteractable != null) grabInteractable.enabled = false;
         if (handGrabInteractable != null) handGrabInteractable.enabled = false;
 
+        // 2. Freeze physics completely
         if (rb != null)
         {
             rb.linearVelocity = Vector3.zero;
@@ -58,6 +62,7 @@ public class DraggableShape : MonoBehaviour
             rb.isKinematic = true;
         }
 
+        // 3. Snap and lock transform
         transform.position = targetSnapPoint.position;
         transform.rotation = targetSnapPoint.rotation;
     }
@@ -77,12 +82,12 @@ public class DraggableShape : MonoBehaviour
 
     private IEnumerator HardResetRoutine()
     {
-        // 1. Disable interactors to force Meta SDK to release grab hold
         if (grabbable != null) grabbable.enabled = false;
         if (grabInteractable != null) grabInteractable.enabled = false;
         if (handGrabInteractable != null) handGrabInteractable.enabled = false;
 
-        // 2. Clear physics forces
+        transform.SetParent(initialParent);
+
         if (rb != null)
         {
             rb.isKinematic = false;
@@ -90,18 +95,14 @@ public class DraggableShape : MonoBehaviour
             rb.angularVelocity = Vector3.zero;
         }
 
-        // 3. Move back to spawn
         transform.position = initialPosition;
         transform.rotation = initialRotation;
 
-        // 4. Wait one frame for SDK input buffers to clear
         yield return new WaitForFixedUpdate();
 
-        // 5. Ensure position sticks
         transform.position = initialPosition;
         transform.rotation = initialRotation;
 
-        // 6. Restore grabbing only if not permanently locked
         if (!isLocked)
         {
             if (grabbable != null) grabbable.enabled = true;
